@@ -14,7 +14,7 @@ in pkgs.mkShell {
     pkgs.python311Packages.evaluate
     pkgs.python311Packages.accelerate
     pkgs.python311Packages.pip
-    
+    pkgs.python311Packages.pytorch-lightning
   ];
 
   shellHook = ''

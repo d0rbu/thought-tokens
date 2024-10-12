@@ -8,22 +8,34 @@ from transformers import PreTrainedTokenizer, PreTrainedModel, BatchEncoding
 THOUGHT_TOKEN_FORMAT = "[THOUGHT_{i}]"
 
 
-def add_thought_tokens(model: PreTrainedModel, tokenizer: PreTrainedTokenizer, thought_token_embeddings: th.Tensor) -> None:
+def add_thought_tokens(model: PreTrainedModel, tokenizer: PreTrainedTokenizer, thought_token_embeddings: th.Tensor, thought_token_unembeddings: th.Tensor | None = None) -> None:
     """
     Add thought tokens to the model and tokenizer.
 
     Args:
         model: The model to which to add the thought tokens.
         tokenizer: The tokenizer to which to add the thought tokens.
-        thought_token_embeddings: The thought token embeddings to add to the model and tokenizer.
+        thought_token_embeddings: The thought token embeddings to add to the model, also determines the number of thought tokens to add.
+        thought_token_unembeddings: The thought token unembeddings to add to the model, the shape must match the thought token embeddings' shape transposed. If the model has tied embeddings, do not provide this argument.
     """
-    thought_tokens = [THOUGHT_TOKEN_FORMAT.format(i=i) for i in range(thought_token_embeddings.shape[0])]
     logger.info(f"Adding {len(thought_tokens)} thought tokens to the model and tokenizer.")
+
+    model.set_input_embeddings(th.cat([model.get_input_embeddings().weight, thought_token_embeddings], dim=0))
+
+    has_tied_embeddings: bool = getattr(model.config, "tie_word_embeddings", False)
+    if thought_token_unembeddings is None:
+        assert has_tied_embeddings, "Thought token unembeddings not provided, but the model does not have tied embeddings."
+        model.tie_weights()
+    else:
+        assert not has_tied_embeddings, "Thought token unembeddings provided, but the model has tied embeddings."
+        assert thought_token_embeddings.shape == thought_token_unembeddings.shape[::-1], "The thought token embeddings and unembeddings' shapes must be transposed."
+        model.set_output_embeddings(th.cat([model.get_output_embeddings().weight, thought_token_unembeddings], dim=0))
+
+    thought_tokens = [THOUGHT_TOKEN_FORMAT.format(i=i) for i in range(thought_token_embeddings.shape[0])]
 
     tokenizer.add_special_tokens({"additional_special_tokens": thought_tokens}, replace_additional_special_tokens=False)
     tokenizer._thought_tokens = thought_tokens
     tokenizer._thought_token_ids = tokenizer.convert_tokens_to_ids(thought_tokens)
-    model.set_input_embeddings(th.cat([model.get_input_embeddings().weight, thought_token_embeddings], dim=0))
 
 
 def tokenize_with_thought_token_type_ids(tokenizer: PreTrainedTokenizer, **kwargs: Any) -> BatchEncoding:
