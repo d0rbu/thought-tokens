@@ -4,10 +4,9 @@ import pytorch_lightning as L  # sorry lightning, pkgs.python311Packages.lightni
 import torch.nn.functional as F
 
 from torch import nn
-from torch.optim import adam
 from torch.utils.data import DataLoader
 from core.utils import prepare_model_and_tokenizer_for_thought_tokens
-from transformers import PreTrainedModel, PreTrainedTokenizer, AutoModelForCausalLM, AutoTokenizer
+from transformers import PreTrainedModel, PreTrainedTokenizer, AutoModelForCausalLM, AutoTokenizer, AdamW
 
 
 class ThoughtTokenLM(L.LightningModule):
@@ -23,3 +22,7 @@ class ThoughtTokenLM(L.LightningModule):
 
         self.model = model
         self.tokenizer = tokenizer
+
+    def training_step(self, batch, batch_idx):
+        # TODO: we need to come up with a good training setup that allows us to both optimize free thought embeddings on a given batch and also optimize the thought embeddings themselves across batches
+        pass
