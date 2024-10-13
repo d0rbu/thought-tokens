@@ -61,7 +61,7 @@ def dependent_thought_token_embed_modifier(embedding_func: Callable[[th.Tensor, 
     return embed_thought_tokens
 
 
-def thought_token_embed_modifier(embedding_func: Callable[[th.Tensor], th.Tensor]) -> Callable[[PreTrainedModel, BatchEncoding], BatchEncoding]:
+def thought_token_embed_modifier(embedding_func: Callable[[th.Tensor, th.LongTensor], th.Tensor]) -> Callable[[PreTrainedModel, BatchEncoding], BatchEncoding]:
     """
     Create a thought token embedder that embeds thought tokens in a sequence with an embedding function independent of the standard token embeddings.
 
@@ -74,16 +74,17 @@ def thought_token_embed_modifier(embedding_func: Callable[[th.Tensor], th.Tensor
 
     def dependent_thought_token_embedding_func(embeds: th.Tensor, input_ids: th.LongTensor, thought_token_mask: th.BoolTensor) -> th.Tensor:
         """
-        Thought token embedding function wrapper that passes only the thought tokens to the independent embedding function.
+        Thought token embedding function wrapper that passes only the thought tokens to the embedding function.
 
         Args:
             embeds: The original embedded sequence.
+            input_ids: The input IDs of the thought tokens.
             thought_token_mask: The thought token mask.
 
         Returns:
             The new embedded sequence.
         """
-        embeds[thought_token_mask] = embedding_func(embeds[thought_token_mask])
+        embeds[thought_token_mask] = embedding_func(embeds[thought_token_mask], input_ids[thought_token_mask])
         return embeds
 
     dependent_thought_token_embedding_func.__name__ = embedding_func.__name__
@@ -91,7 +92,36 @@ def thought_token_embed_modifier(embedding_func: Callable[[th.Tensor], th.Tensor
     return dependent_thought_token_embed_modifier(dependent_thought_token_embedding_func)
 
 
-def thought_token_embedder(embedding_func: Callable[[th.Size], th.Tensor]) -> Callable[[PreTrainedModel, BatchEncoding], BatchEncoding]:
+def thought_token_embedder(embedding_func: Callable[[int, th.LongTensor], th.Tensor]) -> Callable[[PreTrainedModel, BatchEncoding], BatchEncoding]:
+    """
+    Create a thought token embedder that embeds thought token embeddings based on their ids.
+
+    Args:
+        embedding_func: The thought token embedding function.
+
+    Returns:
+        The thought token embedder.
+    """
+
+    def embed_thought_tokens(embedded_thought_tokens: th.Tensor, input_ids: th.LongTensor) -> th.Tensor:
+        """
+        Thought token embedding wrapper that passes only the thought token IDs and dimensionality of the embeddings to the embedding function.
+
+        Args:
+            embedded_thought_tokens: The original embedded thought tokens.
+            input_ids: The input IDs of the thought tokens.
+
+        Returns:
+            The new embedded thought tokens.
+        """
+        return embedding_func(embedded_thought_tokens.shape[-1], input_ids)
+
+    embed_thought_tokens.__name__ = embedding_func.__name__
+
+    return thought_token_embed_modifier(embed_thought_tokens)
+
+
+def thought_token_embed_generator(embedding_func: Callable[[th.Size], th.Tensor]) -> Callable[[PreTrainedModel, BatchEncoding], BatchEncoding]:
     """
     Create a thought token embedder that only uses the shape to create thought token embeddings.
 
@@ -102,17 +132,18 @@ def thought_token_embedder(embedding_func: Callable[[th.Size], th.Tensor]) -> Ca
         The thought token embedder.
     """
 
-    def embed_thought_tokens(embedded_thought_tokens: th.Tensor) -> th.Tensor:
+    def embed_thought_tokens(embedding_dim: int, input_ids: th.LongTensor) -> th.Tensor:
         """
         Create thought tokens embeddings that adhere to the original embedding shape.
 
         Args:
-            embedded_thought_tokens: The original embedded thought tokens.
+            embedding_dim: The dimensionality of the thought token embeddings.
+            input_ids: The input IDs of the thought tokens.
 
         Returns:
             The new embedded thought tokens.
         """
-        return embedding_func(embedded_thought_tokens.shape)
+        return embedding_func(th.Size((*input_ids.shape, embedding_dim)))
 
     embed_thought_tokens.__name__ = embedding_func.__name__
 
@@ -120,7 +151,7 @@ def thought_token_embedder(embedding_func: Callable[[th.Size], th.Tensor]) -> Ca
 
 
 
-@thought_token_embedder
+@thought_token_embed_generator
 def normal_thought_embedding(embed_shape: th.Size, mean: float = 0.0, std: float = 1.0) -> th.Tensor:
     """
     Initialize thought token embeddings with a normal distribution.
@@ -137,7 +168,7 @@ def normal_thought_embedding(embed_shape: th.Size, mean: float = 0.0, std: float
     return th.normal(mean, std, embed_shape)
 
 
-@thought_token_embedder
+@thought_token_embed_generator
 def orthogonal_thought_embedding(embed_shape: th.Size) -> th.Tensor:
     """
     Initialize thought token embeddings with orthogonal vectors.

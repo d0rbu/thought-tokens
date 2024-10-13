@@ -16,7 +16,7 @@ def add_thought_tokens(model: PreTrainedModel, tokenizer: PreTrainedTokenizer, t
         model: The model to which to add the thought tokens.
         tokenizer: The tokenizer to which to add the thought tokens.
         thought_token_embeddings: The thought token embeddings to add to the model, also determines the number of thought tokens to add.
-        thought_token_unembeddings: The thought token unembeddings to add to the model, the shape must match the thought token embeddings' shape transposed. If the model has tied embeddings, do not provide this argument.
+        thought_token_unembeddings: The thought token unembeddings to add to the model, the shape must match the thought token embeddings' shape. If the model has tied embeddings, do not provide this argument.
     """
     logger.info(f"Adding {len(thought_tokens)} thought tokens to the model and tokenizer.")
 
@@ -28,7 +28,7 @@ def add_thought_tokens(model: PreTrainedModel, tokenizer: PreTrainedTokenizer, t
         model.tie_weights()
     else:
         assert not has_tied_embeddings, "Thought token unembeddings provided, but the model has tied embeddings."
-        assert thought_token_embeddings.shape == thought_token_unembeddings.shape[::-1], "The thought token embeddings and unembeddings' shapes must be transposed."
+        assert thought_token_embeddings.shape == thought_token_unembeddings.shape, "The thought token embeddings and unembeddings' shapes must be equal."
         model.set_output_embeddings(th.cat([model.get_output_embeddings().weight, thought_token_unembeddings], dim=0))
 
     thought_tokens = [THOUGHT_TOKEN_FORMAT.format(i=i) for i in range(thought_token_embeddings.shape[0])]
