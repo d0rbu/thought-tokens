@@ -9,7 +9,7 @@ from typing import Self, Callable
 from functools import partialmethod
 from torch.utils.data import DataLoader
 from core.utils import prepare_model_and_tokenizer_for_thought_tokens
-from transformers import PreTrainedModel, PreTrainedTokenizer, AutoModelForCausalLM, AutoTokenizer, AdamW
+from transformers import PreTrainedModel, PreTrainedTokenizer, AutoModelForCausalLM, AutoTokenizer, BatchEncoding, AdamW
 
 
 class InterstitialThoughtTokenLM(L.LightningModule):
@@ -41,7 +41,7 @@ class InterstitialThoughtTokenLM(L.LightningModule):
         self.model.eval()
 
         with th.no_grad():
-            num_thought_tokens: int = self.model.thought_token_embeddings().shape[0]
+            num_thought_tokens: int = self.model.num_thought_tokens
             current_output_embeddings = self.model.get_output_embeddings().weight
 
             unembedding_initialization = self._cluster_final_token_embeddings(
@@ -182,8 +182,53 @@ class InterstitialThoughtTokenLM(L.LightningModule):
 
     def training_step(
         self: Self,
-        batch: th.Tensor,
+        batch: BatchEncoding,
         batch_idx: int
     ) -> th.Tensor:
         # TODO: we need to come up with a good training setup that allows us to both optimize free thought embeddings on a given batch and also optimize the thought embeddings themselves across batches
         pass
+
+    def _insert_thought_tokens(
+        self: Self,
+        batch: BatchEncoding
+    ) -> tuple[th.Tensor, th.Tensor]:
+        self.model.eval()
+        with th.no_grad():
+            outputs = self.model(input_ids=batch.input_ids)
+            predicted_token_ids = th.argmax(outputs.logits, dim=-1)  # (B, T)
+            thought_token_mask = predicted_token_ids >= self.model.num_standard_tokens
+
+            # expand the length dimension to insert the thought tokens
+            max_sequence_expansion = thought_token_mask.sum(dim=-1).max()
+
+            input_ids = th.cat([batch.input_ids, th.empty((batch.input_ids.shape[0], max_sequence_expansion), dtype=th.long, device=batch.input_ids.device)], dim=-1)
+            attention_mask = th.cat([batch.attention_mask, th.empty((batch.attention_mask.shape[0], max_sequence_expansion), dtype=th.long, device=batch.attention_mask.device)], dim=-1)
+            if "token_type_ids" in batch:
+                token_type_ids = th.cat([batch.token_type_ids, th.empty((batch.token_type_ids.shape[0], max_sequence_expansion), dtype=th.long, device=batch.token_type_ids.device)], dim=-1)
+            else:
+                token_type_ids = th.zeros_like(input_ids)
+
+            # we insert the corresponding thought tokens where the model predicts it should be
+            cumulative_thought_tokens_inserted = thought_token_mask.cumsum(dim=-1)  # (B, T)
+
+            # get the new indices of where each token should be, after the thought tokens are inserted
+            current_indices = th.arange(input_ids.shape[-1], device=input_ids.device).repeat(input_ids.shape[0], 1)  # (B, T)
+            new_indices = current_indices + cumulative_thought_tokens_inserted
+
+            # move the standard tokens to their new indices
+            input_ids.scatter_(dim=-1, index=new_indices, src=input_ids)
+            attention_mask.scatter_(dim=-1, index=new_indices, src=attention_mask)
+            token_type_ids.scatter_(dim=-1, index=new_indices, src=token_type_ids)
+
+            # get indices of where the thought tokens should be inserted
+            thought_token_indices = th.where(thought_token_mask)  # (N, 2)
+
+            # offset the thought token indices by the cumulative thought tokens inserted
+            thought_token_indices += cumulative_thought_tokens_inserted[thought_token_indices]
+
+            # insert the thought tokens
+            input_ids[thought_token_indices] = predicted_token_ids[thought_token_mask]
+            attention_mask[thought_token_indices] = 1
+            token_type_ids[thought_token_indices] = 1
+
+        self.model.train()

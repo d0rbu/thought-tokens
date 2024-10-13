@@ -37,6 +37,8 @@ def prepare_model_and_tokenizer_for_thought_tokens(model: PreTrainedModel, token
 
     model.thought_token_embeddings = lambda: model.get_input_embeddings().weight[-thought_token_embeddings.shape[0]:]
     model.thought_token_unembeddings = lambda: model.get_output_embeddings().weight[-thought_token_embeddings.shape[0]:]
+    model.num_thought_tokens = thought_token_embeddings.shape[0]
+    model.num_standard_tokens = model.get_input_embeddings().weight.shape[0] - model.num_thought_tokens
 
     for thought_token_embedder in THOUGHT_TOKEN_EMBEDDERS:
         setattr(model, thought_token_embedder.__name__, partial(thought_token_embedder, model=model))
