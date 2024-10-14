@@ -185,13 +185,18 @@ class InterstitialThoughtTokenLM(L.LightningModule):
         batch: BatchEncoding,
         batch_idx: int
     ) -> th.Tensor:
-        # TODO: we need to come up with a good training setup that allows us to both optimize free thought embeddings on a given batch and also optimize the thought embeddings themselves across batches
-        pass
+        batch_with_inserted_thought_tokens = self._insert_thought_tokens(batch)
+        input_ids = batch_with_inserted_thought_tokens.input_ids
+        attention_mask = batch_with_inserted_thought_tokens.attention_mask
+
+        outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=input_ids)
+
+        return outputs.loss[attention_mask].sum()
 
     def _insert_thought_tokens(
         self: Self,
         batch: BatchEncoding
-    ) -> tuple[th.Tensor, th.Tensor]:
+    ) -> BatchEncoding:
         self.model.eval()
         with th.no_grad():
             outputs = self.model(input_ids=batch.input_ids)
@@ -232,3 +237,5 @@ class InterstitialThoughtTokenLM(L.LightningModule):
             token_type_ids[thought_token_indices] = 1
 
         self.model.train()
+
+        return BatchEncoding(input_ids=input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids)
