@@ -20,6 +20,8 @@ class InterstitialThoughtTokenLM(L.LightningModule):
         thought_token_embeddings: th.Tensor | int = 1024,
         thought_token_unembeddings: th.Tensor | None = None,
         unembedding_initialization_distance_func: Callable[[th.Tensor, th.Tensor], th.Tensor] = th.cdist,
+        warmup_steps: int = 0,
+        lr: float = 5e-5,
     ) -> None:
         super().__init__()
 
@@ -33,6 +35,8 @@ class InterstitialThoughtTokenLM(L.LightningModule):
         self.model = model
         self.tokenizer = tokenizer
         self.unembedding_initialization_distance_func = unembedding_initialization_distance_func
+        self.warmup_steps = warmup_steps
+        self.lr = lr
 
     def on_fit_start(self: Self) -> None:
         if self.global_step > 0:
@@ -62,6 +66,54 @@ class InterstitialThoughtTokenLM(L.LightningModule):
             self.model.set_input_embeddings(current_input_embeddings)
 
         self.model.train()
+
+    def training_step(
+        self: Self,
+        batch: BatchEncoding,
+        batch_idx: int
+    ) -> th.Tensor:
+        batch_with_inserted_thought_tokens = self._insert_thought_tokens(batch)
+        input_ids = batch_with_inserted_thought_tokens.input_ids
+        attention_mask = batch_with_inserted_thought_tokens.attention_mask
+
+        outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=input_ids)
+
+        return outputs.loss[attention_mask].sum()
+
+    def validation_step(
+        self: Self,
+        batch: BatchEncoding,
+        batch_idx: int
+    ) -> th.Tensor:
+        batch_with_inserted_thought_tokens = self._insert_thought_tokens(batch)
+        input_ids = batch_with_inserted_thought_tokens.input_ids
+        attention_mask = batch_with_inserted_thought_tokens.attention_mask
+
+        outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=input_ids)
+
+        standard_token_losses = outputs.loss[attention_mask]
+        standard_token_perplexity = th.exp(standard_token_losses.mean())
+        standard_token_loss = standard_token_losses.sum()
+
+        self.log_dict({"val_loss": standard_token_loss, "val_perplexity": standard_token_perplexity})
+
+        return standard_token_loss
+
+    def configure_optimizers(self: Self) -> th.optim.Optimizer:
+        optimizer = AdamW(self.model.parameters(), lr=self.lr)
+
+        scheduler = th.optim.lr_scheduler.LambdaLR(
+            optimizer=optimizer,
+            lr_lambda=lambda step: min(1.0, step / self.warmup_steps)
+        )
+
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "interval": "step"
+            }
+        }
 
     def _cluster_final_token_embeddings(
         self: Self,
@@ -179,19 +231,6 @@ class InterstitialThoughtTokenLM(L.LightningModule):
         return centroids[fixed_centroids.shape[0]:]
 
     kmeans = partialmethod(partial_kmeans, fixed_centroids=None)
-
-    def training_step(
-        self: Self,
-        batch: BatchEncoding,
-        batch_idx: int
-    ) -> th.Tensor:
-        batch_with_inserted_thought_tokens = self._insert_thought_tokens(batch)
-        input_ids = batch_with_inserted_thought_tokens.input_ids
-        attention_mask = batch_with_inserted_thought_tokens.attention_mask
-
-        outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=input_ids)
-
-        return outputs.loss[attention_mask].sum()
 
     def _insert_thought_tokens(
         self: Self,
