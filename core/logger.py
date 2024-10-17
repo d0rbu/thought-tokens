@@ -1,3 +1,3 @@
-from logger import Logger
+from loguru import logger
 
-logger = Logger()
+logger.add("logs.log", format="{time} {level} {message}", level="DEBUG")

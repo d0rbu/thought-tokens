@@ -1,10 +1,10 @@
 import torch as th
 
-from logger import logger
+from .logger import logger
 from functools import partial
-from model_utils import THOUGHT_TOKEN_EMBEDDERS
+from .model_utils import THOUGHT_TOKEN_EMBEDDERS
 from transformers import PreTrainedModel, PreTrainedTokenizer
-from tokenizer_utils import tokenize_with_thought_token_type_ids, add_thought_tokens
+from .tokenizer_utils import tokenize_with_thought_token_type_ids, add_thought_tokens
 
 
 def prepare_model_and_tokenizer_for_thought_tokens(model: PreTrainedModel, tokenizer: PreTrainedTokenizer, thought_token_embeddings: th.Tensor | int, thought_token_unembeddings: th.Tensor | None = None) -> None:

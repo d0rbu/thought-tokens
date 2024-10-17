@@ -22,17 +22,28 @@ let
     version = "1.3.0";
     format = "pyproject";
     doCheck = false;
-    src = pkgs.fetchFromGitHub {
-      owner = "treykeown";
-      repo = "arguably";
-      rev = "v1.3.0";
-      sha256 = "CumvE8o1mJQ/uwZ6ZikqOKOygAllTdw5jyt09DNdMUE=";
+    src = pkgs.fetchPypi {
+      inherit pname version;
+      sha256 = "9261e49d0281600e9eac3fb2e31d2022dc0d002b6370461d787b20690eb2a98d";
     };
 
-    # Add poetry-core as a build input
     propagatedBuildInputs = [
       pkgs.python312Packages.poetry-core
       docstring-parser
+    ];
+  };
+
+  huggingface-hub = python.pkgs.buildPythonPackage rec {
+    pname = "huggingface-hub[cli]";
+    version = "0.25.2";
+    format = "pyproject";
+    src = pkgs.fetchPypi {
+      inherit pname version;
+      sha256 = "a1014ea111a5f40ccd23f7f7ba8ac46e20fa3b658ced1f86a00c75c06ec6423c";
+    };
+
+    propagatedBuildInputs = [
+      pkgs.python312Packages.poetry-core
     ];
   };
 
@@ -49,6 +60,7 @@ let
     pip
     pytorch-lightning
     arguably
+    loguru
   ]);
 in pkgs.mkShell {
   packages = [
@@ -58,5 +70,8 @@ in pkgs.mkShell {
   shellHook = ''
     export PYTHONPATH="$(pwd):$PYTHONPATH"
     export CUDA_PATH=${pkgs.cudatoolkit}
+
+    source .env
+    huggingface-cli login --token $HF_TOKEN
   '';
 }

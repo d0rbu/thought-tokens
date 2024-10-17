@@ -42,4 +42,7 @@ def train(
     trainer = Trainer(max_epochs=max_epochs)
 
     trainer.fit(model=module, datamodule=data_module)
-    
+
+
+if __name__ == "__main__":
+    arguably.run()

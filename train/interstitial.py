@@ -1,10 +1,8 @@
-import os
 import torch as th
 import pytorch_lightning as L  # sorry lightning, pkgs.python311Packages.lightning in my nativeBuildInputs doesnt work
 import torch.nn.functional as F
 import torch.distributed as dist
 
-from torch import nn
 from typing import Self, Callable
 from functools import partialmethod
 from torch.utils.data import DataLoader

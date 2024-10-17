@@ -1,10 +1,11 @@
 import torch as th
 
-from logger import logger
 from typing import Any
+from .logger import logger
 from transformers import PreTrainedTokenizer, PreTrainedModel, BatchEncoding
 
 
+LOGGER_NAME = "thought_tokens"
 THOUGHT_TOKEN_FORMAT = "[THOUGHT_{i}]"
 
 
