@@ -1,4 +1,5 @@
 import torch as th
+import torch.nn as nn
 
 from typing import Any
 from .logger import logger
@@ -19,9 +20,10 @@ def add_thought_tokens(model: PreTrainedModel, tokenizer: PreTrainedTokenizer, t
         thought_token_embeddings: The thought token embeddings to add to the model, also determines the number of thought tokens to add.
         thought_token_unembeddings: The thought token unembeddings to add to the model, the shape must match the thought token embeddings' shape. If the model has tied embeddings, do not provide this argument.
     """
-    logger.info(f"Adding {len(thought_tokens)} thought tokens to the model and tokenizer.")
+    logger.info(f"Adding {thought_token_embeddings.shape[0]} thought tokens to the model and tokenizer.")
 
-    model.set_input_embeddings(th.cat([model.get_input_embeddings().weight, thought_token_embeddings], dim=0))
+    new_embeddings = nn.Parameter(th.cat([model.get_input_embeddings().weight, thought_token_embeddings], dim=0))
+    model.set_input_embeddings(nn.Embedding.from_pretrained(new_embeddings))
 
     has_tied_embeddings: bool = getattr(model.config, "tie_word_embeddings", False)
     if thought_token_unembeddings is None:
@@ -30,7 +32,13 @@ def add_thought_tokens(model: PreTrainedModel, tokenizer: PreTrainedTokenizer, t
     else:
         assert not has_tied_embeddings, "Thought token unembeddings provided, but the model has tied embeddings."
         assert thought_token_embeddings.shape == thought_token_unembeddings.shape, "The thought token embeddings and unembeddings' shapes must be equal."
-        model.set_output_embeddings(th.cat([model.get_output_embeddings().weight, thought_token_unembeddings], dim=0))
+        new_unembeddings = th.cat([model.get_output_embeddings().weight, thought_token_unembeddings], dim=0)
+        new_unembedding_linear = nn.Linear(new_unembeddings.shape[1], new_unembeddings.shape[0], bias=False)
+
+        with th.no_grad():
+            new_unembedding_linear.weight.copy_(new_unembeddings)
+
+        model.set_output_embeddings(new_unembedding_linear)
 
     thought_tokens = [THOUGHT_TOKEN_FORMAT.format(i=i) for i in range(thought_token_embeddings.shape[0])]
 

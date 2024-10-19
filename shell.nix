@@ -2,6 +2,7 @@ let
   # Pin to a specific nixpkgs commit for reproducibility.
   pkgs = import (fetchTarball "https://github.com/NixOS/nixpkgs/archive/24bb1b20a9a57175965c0a9fb9533e00e370c88b.tar.gz") {config.allowUnfree = true; };
   python = pkgs.python312;
+  pythonPackages = pkgs.python312Packages;
 
   docstring-parser = python.pkgs.buildPythonPackage rec {
     pname = "docstring_parser";
@@ -13,7 +14,7 @@ let
     };
 
     propagatedBuildInputs = [
-      pkgs.python312Packages.poetry-core
+      pythonPackages.poetry-core
     ];
   };
 
@@ -28,7 +29,7 @@ let
     };
 
     propagatedBuildInputs = [
-      pkgs.python312Packages.poetry-core
+      pythonPackages.poetry-core
       docstring-parser
     ];
   };
@@ -43,7 +44,7 @@ let
     };
 
     propagatedBuildInputs = [
-      pkgs.python312Packages.poetry-core
+      pythonPackages.poetry-core
     ];
   };
 

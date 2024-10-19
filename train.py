@@ -2,6 +2,7 @@ import arguably
 import importlib
 
 from typing import Any
+from core.logger import logger
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from pytorch_lightning import LightningModule, LightningDataModule, Trainer
 
@@ -12,6 +13,7 @@ def train(
     script: str,
     data: str = "minipile",
     model: str = "meta-llama/Llama-3.2-1B",
+    batch_size: int = 32,
     warmup_steps: int = 1000,
     lr: float = 5e-5,
     num_thought_tokens: int = 1024,
@@ -31,17 +33,18 @@ def train(
 
     lightning_data_module_name, lightning_data_module = lightning_data_modules[0]
 
-    model = AutoModelForCausalLM.from_pretrained(model)
-    tokenizer = AutoTokenizer.from_pretrained(model)
+    model_str = model
+    model = AutoModelForCausalLM.from_pretrained(model_str)
+    tokenizer = AutoTokenizer.from_pretrained(model_str)
 
-    print(f"Training {model} with {lightning_module_name} on {lightning_data_module_name}.")
-    print(f"Using {num_thought_tokens} thought tokens.")
+    logger.info(f"Training {model_str} with {lightning_module_name} on {lightning_data_module_name}.")
+    logger.info(f"Using {num_thought_tokens} thought tokens.")
 
-    module = lightning_module(model=model, tokenizer=tokenizer, thought_token_unembeddings=num_thought_tokens, warmup_steps=warmup_steps, lr=lr)
-    data_module = lightning_data_module()
+    module = lightning_module(model=model, tokenizer=tokenizer, thought_token_embeddings=num_thought_tokens, warmup_steps=warmup_steps, lr=lr)
+    data_module = lightning_data_module(batch_size=batch_size)
     trainer = Trainer(max_epochs=max_epochs)
 
-    trainer.fit(model=module, datamodule=data_module)
+    trainer.fit(module, datamodule=data_module)
 
 
 if __name__ == "__main__":

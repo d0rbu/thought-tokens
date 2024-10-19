@@ -16,7 +16,7 @@ class InterstitialThoughtTokenLM(L.LightningModule):
         model: PreTrainedModel | str,
         tokenizer: PreTrainedTokenizer | str,
         thought_token_embeddings: th.Tensor | int = 1024,
-        thought_token_unembeddings: th.Tensor | None = None,
+        thought_token_unembeddings: th.Tensor | int | None = None,
         unembedding_initialization_distance_func: Callable[[th.Tensor, th.Tensor], th.Tensor] = th.cdist,
         warmup_steps: int = 0,
         lr: float = 5e-5,
