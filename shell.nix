@@ -1,8 +1,8 @@
 let
   # Pin to a specific nixpkgs commit for reproducibility.
-  pkgs = import (fetchTarball "https://github.com/NixOS/nixpkgs/archive/24bb1b20a9a57175965c0a9fb9533e00e370c88b.tar.gz") {config.allowUnfree = true; };
-  python = pkgs.python312;
-  pythonPackages = pkgs.python312Packages;
+  pkgs = import (fetchTarball "https://github.com/NixOS/nixpkgs/archive/24bb1b20a9a57175965c0a9fb9533e00e370c88b.tar.gz") {config.allowUnfree = true;};
+  python = pkgs.python311;
+  pythonPackages = pkgs.python311Packages;
 
   docstring-parser = python.pkgs.buildPythonPackage rec {
     pname = "docstring_parser";
@@ -48,21 +48,21 @@ let
     ];
   };
 
-  python-with-packages = python.withPackages (ps: with ps; [
-    torch
-    torchaudio
-    torch-audiomentations
-    librosa
-    jiwer
-    datasets
-    transformers
-    evaluate
-    accelerate
-    pip
-    pytorch-lightning
-    arguably
-    loguru
-  ]);
+  python-with-packages = python.withPackages (ps: with ps;
+    let
+      accelerate-bin = accelerate.override { torch = torch-bin; };
+      lightning-bin = pytorch-lightning.override { torch = torch-bin; };
+    in [
+      torch-bin
+      datasets
+      transformers
+      evaluate
+      accelerate-bin
+      pip
+      lightning-bin
+      arguably
+      loguru
+    ]);
 in pkgs.mkShell {
   packages = [
     python-with-packages
