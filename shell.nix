@@ -62,6 +62,8 @@ let
       lightning-bin
       arguably
       loguru
+      tensorboard
+      tensorboardx
     ]);
 in pkgs.mkShell {
   packages = [
