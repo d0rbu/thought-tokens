@@ -41,13 +41,16 @@ class InterstitialThoughtTokenLM(L.LightningModule):
             return
 
         self.model.eval()
+        use_cache = self.model.config.use_cache
+        self.model.config.use_cache = False
+        self.tokenizer.add_special_tokens({'pad_token': '[PAD]'})
 
         with th.no_grad():
             num_thought_tokens: int = self.model.num_thought_tokens
             current_output_embeddings = self.model.get_output_embeddings().weight
 
             unembedding_initialization = self._cluster_final_token_embeddings(
-                data=self.train_dataloader(),
+                data=self.trainer.datamodule.train_dataloader(),
                 non_fixed_centroids=num_thought_tokens,
                 fixed_centroids=current_output_embeddings,
                 distance_func=self.unembedding_initialization_distance_func
@@ -63,6 +66,7 @@ class InterstitialThoughtTokenLM(L.LightningModule):
             current_input_embeddings[-num_thought_tokens:] = current_input_embeddings[nearest_embedding_indices]
             self.model.set_input_embeddings(current_input_embeddings)
 
+        self.model.config.use_cache = use_cache
         self.model.train()
 
     def training_step(
@@ -140,7 +144,11 @@ class InterstitialThoughtTokenLM(L.LightningModule):
 
         final_token_embeddings = th.empty((0, self.model.config.hidden_size), device=self.model.device)
         for batch in data:
-            outputs = self.model(**batch)
+            batch_encoded = self.tokenizer(batch["text"], return_tensors="pt", padding=True)
+            # move to gpu
+            batch_encoded = {k: v.to(self.model.device) for k, v in batch_encoded.items()}
+            import pdb; pdb.set_trace()
+            outputs = self.model(**batch_encoded)
             last_hidden_state = outputs.last_hidden_state.detach()
 
             if not do_partial_kmeans:
