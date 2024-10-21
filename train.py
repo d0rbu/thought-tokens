@@ -13,9 +13,11 @@ def train(
     script: str,
     data: str = "minipile",
     model: str = "meta-llama/Llama-3.2-1B",
-    batch_size: int = 32,
+    batch_size: int = 2,
+    context_length: int = 2048,  # sorry i am gpu poor :(
     warmup_steps: int = 1000,
     lr: float = 5e-5,
+    grad_accum: int = 16,
     num_thought_tokens: int = 1024,
     max_epochs: int = 1,
 ) -> None:
@@ -36,6 +38,8 @@ def train(
     model_str = model
     model = AutoModelForCausalLM.from_pretrained(model_str)
     tokenizer = AutoTokenizer.from_pretrained(model_str)
+
+    tokenizer.model_max_length = context_length
 
     logger.info(f"Training {model_str} with {lightning_module_name} on {lightning_data_module_name}.")
     logger.info(f"Using {num_thought_tokens} thought tokens.")

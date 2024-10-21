@@ -54,6 +54,7 @@ let
       lightning-bin = pytorch-lightning.override { torch = torch-bin; };
     in [
       torch-bin
+      torchvision-bin
       datasets
       transformers
       evaluate
