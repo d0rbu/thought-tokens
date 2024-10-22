@@ -65,6 +65,7 @@ let
       loguru
       tensorboard
       tensorboardx
+      wandb
     ]);
 in pkgs.mkShell {
   packages = [
