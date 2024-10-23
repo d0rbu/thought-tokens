@@ -4,6 +4,7 @@ import pytorch_lightning as L  # sorry lightning, pkgs.python311Packages.lightni
 import torch.distributed as dist
 
 from itertools import chain
+from core.logger import logger
 from functools import partialmethod
 from typing import Self, Callable, Any
 from torch.utils.data import DataLoader
@@ -59,6 +60,9 @@ class InterstitialThoughtTokenLM(L.LightningModule):
                 fixed_centroids=current_output_embeddings,
                 distance_func=self.unembedding_initialization_distance_func
             )
+            # make the magnitudes of the new embeddings have the same mean and std as the current embeddings
+            unembedding_initialization = self._normalize_embeddings(unembedding_initialization, current_output_embeddings)
+
             current_output_embeddings[-num_thought_tokens:] = unembedding_initialization
             output_head.weight.copy_(current_output_embeddings)
 
@@ -91,7 +95,14 @@ class InterstitialThoughtTokenLM(L.LightningModule):
         batch_with_inserted_thought_tokens = self._insert_thought_tokens(batch)
         input_ids, attention_mask, labels = batch_with_inserted_thought_tokens["input_ids"], batch_with_inserted_thought_tokens["attention_mask"], batch_with_inserted_thought_tokens["labels"]
 
+        th.cuda.empty_cache()
         outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+
+        if outputs.loss.isnan():
+            logger.warning(f"NaN loss detected. Skipping batch {batch_idx}.")
+            return None
+
+        self.log_dict({"train_loss": outputs.loss}, on_step=True, on_epoch=True, prog_bar=True, batch_size=input_ids.shape[0])
 
         return outputs.loss
 
@@ -117,13 +128,16 @@ class InterstitialThoughtTokenLM(L.LightningModule):
         long_loss = long_outputs.loss
         long_perplexity = th.exp(long_loss)
 
-        import pdb; pdb.set_trace()
-        return {
+        log_dict = {
             "val_loss": loss,
             "val_perplexity": perplexity,
             "val_long_loss": long_loss,
             "val_long_perplexity": long_perplexity
         }
+
+        self.log_dict(log_dict, on_step=True, on_epoch=True, prog_bar=True, batch_size=input_ids.shape[0])
+
+        return log_dict
 
     def configure_optimizers(self: Self) -> th.optim.Optimizer:
         # only optimize the embeddings and unembeddings
@@ -152,6 +166,25 @@ class InterstitialThoughtTokenLM(L.LightningModule):
 
         # move to gpu
         return {k: v.to(self.model.device) for k, v in batch_encoded.items()}
+
+    def _normalize_embeddings(
+        self: Self,
+        new_embeddings: th.Tensor,
+        current_embeddings: th.Tensor,
+    ) -> th.Tensor:
+        new_embeddings_norm_mean = new_embeddings.norm(dim=-1).mean()
+        new_embeddings_norm_std = new_embeddings.norm(dim=-1).std()
+
+        current_embeddings_norm_mean = current_embeddings.norm(dim=-1).mean()
+        current_embeddings_norm_std = current_embeddings.norm(dim=-1).std()
+
+        hypersphere_embeddings = new_embeddings / new_embeddings.norm(dim=-1, keepdim=True)
+        rescaled_embeddings = new_embeddings * (current_embeddings_norm_mean / new_embeddings_norm_mean)  # has expectation value of 1 for the magnitudes
+
+        # lerp from hypersphere embeddings to rescaled embeddings
+        alpha = current_embeddings_norm_std / new_embeddings_norm_std
+
+        return alpha * hypersphere_embeddings + (1 - alpha) * rescaled_embeddings
 
     def _cluster_final_token_embeddings(
         self: Self,
