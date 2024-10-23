@@ -1,9 +1,11 @@
+import os
 import arguably
 import importlib
 
 from typing import Any
 from core.logger import logger
 from pytorch_lightning.loggers import WandbLogger
+from pytorch_lightning.callbacks import ModelCheckpoint
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from pytorch_lightning import LightningModule, LightningDataModule, Trainer
 
@@ -24,6 +26,7 @@ def train(
     max_epochs: int = 1,
     num_workers: int = 16,
     val_every: int = 100,
+    ckpt_path: str | None = None,
 ) -> None:
     script_path = f"train.{script}"
     script_module = importlib.import_module(script_path)
@@ -50,9 +53,22 @@ def train(
 
     wandb_logger = WandbLogger(project="thought-token-lm")
 
-    module = lightning_module(model=model, tokenizer=tokenizer, thought_token_embeddings=num_thought_tokens, warmup_steps=warmup_steps, lr=lr)
+    ckpt_dir = f"ckpts/{script}"
+    os.makedirs(ckpt_dir, exist_ok=True)
+
+    if ckpt_path is None:
+        # automatically resume from the latest checkpoint, if it exists
+        potential_path = f"{ckpt_dir}/latest.ckpt"
+        ckpt_path = potential_path if os.path.exists(potential_path) else None
+
+    if ckpt_path:
+        logger.info(f"Resuming from checkpoint {ckpt_path}.")
+        module = lightning_module.load_from_checkpoint(ckpt_path, model=model, tokenizer=tokenizer, thought_token_embeddings=num_thought_tokens, warmup_steps=warmup_steps, lr=lr)
+    else:
+        module = lightning_module(model=model, tokenizer=tokenizer, thought_token_embeddings=num_thought_tokens, warmup_steps=warmup_steps, lr=lr)
     data_module = lightning_data_module(batch_size=batch_size, init_size=init_size, num_workers=num_workers)
-    trainer = Trainer(max_epochs=max_epochs, accumulate_grad_batches=grad_accum, val_check_interval=(val_every * grad_accum) // (batch_size), logger=wandb_logger)
+    ckpt_callback = ModelCheckpoint(dirpath=ckpt_dir, filename="{epoch}-{step}-{val_long_loss:.2f}", monitor="val_long_loss", mode="min")
+    trainer = Trainer(max_epochs=max_epochs, accumulate_grad_batches=grad_accum, val_check_interval=(val_every * grad_accum) // (batch_size), logger=wandb_logger, callbacks=[ckpt_callback])
 
     wandb_logger.log_hyperparams(module.hparams)
 
