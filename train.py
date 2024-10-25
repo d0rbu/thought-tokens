@@ -65,6 +65,7 @@ def train(
         logger.info(f"Resuming from checkpoint {ckpt_path}.")
         module = lightning_module.load_from_checkpoint(ckpt_path, model=model, tokenizer=tokenizer, thought_token_embeddings=num_thought_tokens, warmup_steps=warmup_steps, lr=lr)
     else:
+        logger.info(f"No checkpoint found at {ckpt_path}, starting from scratch.")
         module = lightning_module(model=model, tokenizer=tokenizer, thought_token_embeddings=num_thought_tokens, warmup_steps=warmup_steps, lr=lr)
     data_module = lightning_data_module(batch_size=batch_size, init_size=init_size, num_workers=num_workers)
     ckpt_callback = ModelCheckpoint(dirpath=ckpt_dir, filename="{epoch}-{step}-{val_long_loss:.2f}", monitor="val_long_loss", mode="min", save_last="link")

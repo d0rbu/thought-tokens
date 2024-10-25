@@ -38,6 +38,10 @@ class InterstitialThoughtTokenLM(L.LightningModule):
         self.warmup_steps = warmup_steps
         self.lr = lr
 
+        self.tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+        self.model.resize_token_embeddings(len(self.tokenizer))
+        self.model.config.pad_token_id = self.tokenizer.pad_token_id
+
     def on_fit_start(self: Self) -> None:
         if self.global_step > 0:
             return
@@ -45,9 +49,6 @@ class InterstitialThoughtTokenLM(L.LightningModule):
         self.model.eval()
         use_cache = self.model.config.use_cache
         self.model.config.use_cache = False
-        self.tokenizer.add_special_tokens({'pad_token': '[PAD]'})
-        self.model.resize_token_embeddings(len(self.tokenizer))
-        self.model.config.pad_token_id = self.tokenizer.pad_token_id
 
         with th.no_grad():
             num_thought_tokens: int = self.model.num_thought_tokens
