@@ -58,22 +58,22 @@ def train(
 
     if ckpt_path is None:
         # automatically resume from the latest checkpoint, if it exists
-        potential_path = f"{ckpt_dir}/latest.ckpt"
-        ckpt_path = potential_path if os.path.exists(potential_path) else None
+        potential_path = f"{ckpt_dir}/last.ckpt"
+        if os.path.exists(potential_path):
+            logger.info(f"Resuming from checkpoint {potential_path}.")
+            ckpt_path = potential_path
+        else:
+            logger.info(f"No checkpoint found at {potential_path}, starting from scratch.")
+            ckpt_path = None
 
-    if ckpt_path:
-        logger.info(f"Resuming from checkpoint {ckpt_path}.")
-        module = lightning_module.load_from_checkpoint(ckpt_path, model=model, tokenizer=tokenizer, thought_token_embeddings=num_thought_tokens, warmup_steps=warmup_steps, lr=lr)
-    else:
-        logger.info(f"No checkpoint found at {ckpt_path}, starting from scratch.")
-        module = lightning_module(model=model, tokenizer=tokenizer, thought_token_embeddings=num_thought_tokens, warmup_steps=warmup_steps, lr=lr)
+    module = lightning_module(model=model, tokenizer=tokenizer, thought_token_embeddings=num_thought_tokens, warmup_steps=warmup_steps, lr=lr)
     data_module = lightning_data_module(batch_size=batch_size, init_size=init_size, num_workers=num_workers)
     ckpt_callback = ModelCheckpoint(dirpath=ckpt_dir, filename="{epoch}-{step}-{val_long_loss:.2f}", monitor="val_long_loss", mode="min", save_last="link")
     trainer = Trainer(max_epochs=max_epochs, accumulate_grad_batches=grad_accum, val_check_interval=(val_every * grad_accum) // (batch_size), logger=wandb_logger, callbacks=[ckpt_callback])
 
     wandb_logger.log_hyperparams(module.hparams)
 
-    trainer.fit(module, datamodule=data_module)
+    trainer.fit(module, datamodule=data_module, ckpt_path=ckpt_path)
 
 
 if __name__ == "__main__":

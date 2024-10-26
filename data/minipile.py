@@ -37,6 +37,18 @@ class Minipile(L.LightningDataModule):
         if stage == "test" or stage is None:
             self.test = self.dataset["test"]
 
+    def state_dict(self: Self) -> dict:
+        return {
+            "init_size": self.init_size,
+            "transform": self.transform,
+            "dataloader_params": self.dataloader_params,
+        }
+
+    def load_state_dict(self: Self, state_dict: dict) -> None:
+        self.init_size = state_dict["init_size"]
+        self.transform = state_dict["transform"]
+        self.dataloader_params = state_dict["dataloader_params"]
+
     def init_dataloader(self: Self) -> DataLoader:
         return DataLoader(self.init, **self.dataloader_params)
 
