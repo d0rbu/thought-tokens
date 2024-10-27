@@ -9,7 +9,7 @@ from functools import partialmethod
 from typing import Self, Callable, Any
 from torch.utils.data import DataLoader
 from core.utils import prepare_model_and_tokenizer_for_thought_tokens
-from transformers import PreTrainedModel, PreTrainedTokenizer, AutoModelForCausalLM, AutoTokenizer, BatchEncoding, AdamW
+from transformers import PreTrainedModel, PreTrainedTokenizer, AutoModelForCausalLM, AutoTokenizer, BatchEncoding, AdamW, GenerationConfig
 
 
 class InterstitialThoughtTokenLM(L.LightningModule):
@@ -41,6 +41,12 @@ class InterstitialThoughtTokenLM(L.LightningModule):
         self.tokenizer.add_special_tokens({'pad_token': '[PAD]'})
         self.model.resize_token_embeddings(len(self.tokenizer))
         self.model.config.pad_token_id = self.tokenizer.pad_token_id
+
+        validation_prompt = self.tokenizer(self.SAMPLE_VALIDATION_PROMPT, return_tensors="pt")
+        self.validation_prompt = validation_prompt["input_ids"].cpu()
+        self.validation_generation_config = GenerationConfig(max_length=self.tokenizer.model_max_length, do_sample=True, top_p=0.9, num_return_sequences=5, remove_invalid_values=True, repetition_penalty=1.17)
+
+    SAMPLE_VALIDATION_PROMPT = "Q: Which is greater, 9.11 or 9.9?\n\nA: "
 
     def on_fit_start(self: Self) -> None:
         if self.global_step > 0:
@@ -137,6 +143,14 @@ class InterstitialThoughtTokenLM(L.LightningModule):
         }
 
         self.log_dict(log_dict, on_step=True, on_epoch=True, prog_bar=True, batch_size=input_ids.shape[0])
+
+        if batch_idx == 0:
+            output_samples: th.Tensor = self.model.generate(self.validation_prompt.to(self.model.device), generation_config=self.validation_generation_config)
+
+            raw_outputs = self.tokenizer.batch_decode(output_samples)
+            cleaned_outputs = self.tokenizer.batch_decode(output_samples, skip_special_tokens=True)
+
+            self.logger.log_text(key="validation_samples", columns=["raw_output", "cleaned_output"], data=list(zip(raw_outputs, cleaned_outputs)))
 
         return log_dict
 
