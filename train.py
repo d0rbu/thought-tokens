@@ -68,8 +68,8 @@ def train(
 
     module = lightning_module(model=model, tokenizer=tokenizer, thought_token_embeddings=num_thought_tokens, warmup_steps=warmup_steps, lr=lr)
     data_module = lightning_data_module(batch_size=batch_size, init_size=init_size, num_workers=num_workers)
-    ckpt_callback = ModelCheckpoint(dirpath=ckpt_dir, filename="{epoch}-{step}-{val_long_loss:.2f}", monitor="val_long_loss", mode="min", save_last="link")
-    trainer = Trainer(max_epochs=max_epochs, accumulate_grad_batches=grad_accum, val_check_interval=(val_every * grad_accum) // (batch_size), logger=wandb_logger, callbacks=[ckpt_callback])
+    ckpt_callback = ModelCheckpoint(dirpath=ckpt_dir, filename="{epoch}-{step}-{val_long_loss:.2f}", save_top_k=-1, save_last="link", every_n_train_steps=val_every, monitor="step", mode="max")
+    trainer = Trainer(max_epochs=max_epochs, accumulate_grad_batches=grad_accum, val_check_interval=val_every * grad_accum, logger=wandb_logger, callbacks=[ckpt_callback])
 
     wandb_logger.log_hyperparams(module.hparams)
 

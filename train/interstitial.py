@@ -48,7 +48,7 @@ class InterstitialThoughtTokenLM(L.LightningModule):
 
     SAMPLE_VALIDATION_PROMPT = "Q: Which is greater, 9.11 or 9.9?\n\nA: "
 
-    def on_fit_start(self: Self) -> None:
+    def on_train_start(self: Self) -> None:
         if self.global_step > 0:
             return
 
@@ -135,11 +135,16 @@ class InterstitialThoughtTokenLM(L.LightningModule):
         long_loss = long_outputs.loss
         long_perplexity = th.exp(long_loss)
 
+        num_inserted_thought_tokens = long_input_ids.shape[1] - input_ids.shape[1]
+
         log_dict = {
             "val_loss": loss,
             "val_perplexity": perplexity,
             "val_long_loss": long_loss,
-            "val_long_perplexity": long_perplexity
+            "val_long_perplexity": long_perplexity,
+            "num_inserted_thought_tokens": num_inserted_thought_tokens,
+            "percentage_inserted_thought_tokens": num_inserted_thought_tokens / input_ids.shape[1],
+            "step": self.global_step
         }
 
         self.log_dict(log_dict, on_step=True, on_epoch=True, prog_bar=True, batch_size=input_ids.shape[0])
