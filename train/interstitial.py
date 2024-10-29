@@ -44,7 +44,7 @@ class InterstitialThoughtTokenLM(L.LightningModule):
 
         validation_prompt = self.tokenizer(self.SAMPLE_VALIDATION_PROMPT, return_tensors="pt")
         self.validation_prompt = validation_prompt["input_ids"].cpu()
-        self.validation_generation_config = GenerationConfig(max_length=self.tokenizer.model_max_length, do_sample=True, top_p=0.9, num_return_sequences=5, remove_invalid_values=True, repetition_penalty=1.17)
+        self.validation_generation_config = GenerationConfig(max_length=self.tokenizer.model_max_length, do_sample=True, top_p=0.9, num_return_sequences=5, remove_invalid_values=True, repetition_penalty=1.18)
 
     SAMPLE_VALIDATION_PROMPT = "Q: Which is greater, 9.11 or 9.9?\n\nA: "
 
@@ -149,15 +149,17 @@ class InterstitialThoughtTokenLM(L.LightningModule):
 
         self.log_dict(log_dict, on_step=True, on_epoch=True, prog_bar=True, batch_size=input_ids.shape[0])
 
-        if batch_idx == 0:
-            output_samples: th.Tensor = self.model.generate(self.validation_prompt.to(self.model.device), generation_config=self.validation_generation_config)
-
-            raw_outputs = self.tokenizer.batch_decode(output_samples)
-            cleaned_outputs = self.tokenizer.batch_decode(output_samples, skip_special_tokens=True)
-
-            self.logger.log_text(key="validation_samples", columns=["raw_output", "cleaned_output"], data=list(zip(raw_outputs, cleaned_outputs)))
-
         return log_dict
+
+    def on_validation_start(self: Self) -> None:
+        self.model.eval()
+
+        output_samples: th.Tensor = self.model.generate(self.validation_prompt.to(self.model.device), generation_config=self.validation_generation_config)
+
+        raw_outputs = self.tokenizer.batch_decode(output_samples)
+        cleaned_outputs = self.tokenizer.batch_decode(output_samples, skip_special_tokens=True)
+
+        self.logger.log_text(key="validation_samples", columns=["raw_output", "cleaned_output"], data=list(zip(raw_outputs, cleaned_outputs)))
 
     def configure_optimizers(self: Self) -> th.optim.Optimizer:
         # only optimize the embeddings and unembeddings
