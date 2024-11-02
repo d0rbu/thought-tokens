@@ -44,7 +44,7 @@ class InterstitialThoughtTokenLM(L.LightningModule):
 
         validation_prompt = self.tokenizer(self.SAMPLE_VALIDATION_PROMPT, return_tensors="pt")
         self.validation_prompt = validation_prompt["input_ids"].cpu()
-        self.validation_generation_config = GenerationConfig(max_length=self.tokenizer.model_max_length, do_sample=True, top_p=0.9, num_return_sequences=5, remove_invalid_values=True, repetition_penalty=1.1)
+        self.validation_generation_config = GenerationConfig(max_length=self.tokenizer.model_max_length, do_sample=True, top_p=0.9, num_return_sequences=5, remove_invalid_values=True, repetition_penalty=1.15)
 
     SAMPLE_VALIDATION_PROMPT = "Q: Which is greater, 9.11 or 9.9?\n\nA: "
 
